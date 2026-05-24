@@ -1,0 +1,653 @@
+classdef MCE413 < matlab.apps.AppBase
+
+    properties (Access = public)
+        UIFigure                                matlab.ui.Figure
+        LoginPanel                              matlab.ui.container.Panel
+        Label                                   matlab.ui.control.Label
+        LoginButton                             matlab.ui.control.Button
+        PasswordEditField                       matlab.ui.control.EditField
+        PasswordEditFieldLabel                  matlab.ui.control.Label
+        UsernameEditField                       matlab.ui.control.EditField
+        UsernameEditFieldLabel                  matlab.ui.control.Label
+        MCE415BrakeByWireSimulationGroup3Label  matlab.ui.control.Label
+        FederalUniversityofTechnologyMinnaLabel matlab.ui.control.Label
+        MechatronicsEngineeringLabel            matlab.ui.control.Label
+        Image2                                  matlab.ui.control.Image
+        Image                                   matlab.ui.control.Image
+        PERFORMANCEMETRICSPanel                 matlab.ui.container.Panel
+        ResponseTimeEditField                   matlab.ui.control.EditField
+        ResponseTimeEditFieldLabel              matlab.ui.control.Label
+        LinearityErrorEditField                 matlab.ui.control.EditField
+        LinearityErrorEditFieldLabel            matlab.ui.control.Label
+        PowerConsumptionEditField               matlab.ui.control.EditField
+        PowerConsumptionEditFieldLabel          matlab.ui.control.Label
+        RangeEditField                          matlab.ui.control.EditField
+        RangeEditFieldLabel                     matlab.ui.control.Label
+        ResolutionEditField                     matlab.ui.control.EditField
+        ResolutionEditFieldLabel                matlab.ui.control.Label
+        SensitivityEditField                    matlab.ui.control.EditField
+        SensitivityEditFieldLabel               matlab.ui.control.Label
+        DVISUALISATIONPanel                     matlab.ui.container.Panel
+        UIAxes3                                 matlab.ui.control.UIAxes
+        RESPONSEGRAPHPanel                      matlab.ui.container.Panel
+        UIAxes2                                 matlab.ui.control.UIAxes
+        UIAxes                                  matlab.ui.control.UIAxes
+        INPUTCONTROLSPanel                      matlab.ui.container.Panel
+        SupplyVoltageVEditField                 matlab.ui.control.NumericEditField
+        SupplyVoltageVEditFieldLabel            matlab.ui.control.Label
+        CurrentASlider                          matlab.ui.control.Slider
+        CurrentASliderLabel                     matlab.ui.control.Label
+        PedalAngleSlider                        matlab.ui.control.Slider
+        PedalAngleSliderLabel                   matlab.ui.control.Label
+        SensorTypeDropDown                      matlab.ui.control.DropDown
+        SensorTypeDropDownLabel                 matlab.ui.control.Label
+    end
+
+    methods (Access = private)
+
+        function updateAll(app)
+            app.UIFigure.Name = 'MCE 415 — Brake-By-Wire Simulation | Group 3 | FUTMinna';
+
+            angle      = app.PedalAngleSlider.Value;
+            current    = app.CurrentASlider.Value;
+            voltage    = app.SupplyVoltageVEditField.Value;
+            sensorType = app.SensorTypeDropDown.Value;
+
+            angleRange   = linspace(0, 45, 200);
+            currentRange = linspace(0, 5,  200);
+
+            % ══════════════════════════════════════════════════
+            %  SENSOR MODEL
+            %  Hall Effect:   V_out = V_offset + S x theta
+            %  Potentiometer: V_out = Vs x (theta / theta_max)
+            % ══════════════════════════════════════════════════
+            if strcmp(sensorType, 'Hall Effect')
+                V_offset     = 0.5;
+                V_max        = 4.5;
+                sensitivity  = (V_max - V_offset) / 45;
+                V_sensor     = V_offset + sensitivity .* angleRange;
+                V_current    = V_offset + sensitivity .* angle;
+                resolution   = voltage / 4096;
+                linearityErr = 0.5;
+                sensorEqn    = 'V_out = 0.50 + 0.0889 x theta  [Hall Effect]';
+            else
+                V_offset     = 0;
+                sensitivity  = voltage / 45;
+                V_sensor     = voltage .* (angleRange / 45);
+                V_current    = voltage .* (angle / 45);
+                resolution   = voltage / 1024;
+                linearityErr = 1.0;
+                sensorEqn    = sprintf('V_out = %.1f x (theta/45)  [Potentiometer]', voltage);
+            end
+
+            % ── Sensor Plot ──────────────────────────────────
+            cla(app.UIAxes);
+            plot(app.UIAxes, angleRange, V_sensor, 'c-', 'LineWidth', 2.5);
+            hold(app.UIAxes, 'on');
+            plot(app.UIAxes, angle, V_current, 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
+            plot(app.UIAxes, [angle angle], [0 V_current], 'r--', 'LineWidth', 1);
+            plot(app.UIAxes, [0 angle], [V_current V_current], 'r--', 'LineWidth', 1);
+            hold(app.UIAxes, 'off');
+            xlabel(app.UIAxes, 'Pedal Angle theta (deg)', 'FontWeight', 'bold');
+            ylabel(app.UIAxes, 'Sensor Output V_out (V)', 'FontWeight', 'bold');
+            title(app.UIAxes, sprintf('%s Sensor\n%s', sensorType, sensorEqn), 'FontSize', 10);
+            grid(app.UIAxes, 'on');
+            legend(app.UIAxes, 'Characteristic', 'Operating Point', 'Location', 'northwest');
+
+            % ══════════════════════════════════════════════════
+            %  ACTUATOR MODEL
+            %  EQUATION: F = k x I^2  (k = 20 N/A^2)
+            %  Time constant: tau = L/R = 0.05/2.5 = 0.02 s
+            % ══════════════════════════════════════════════════
+            k         = 20;
+            F_range   = k .* currentRange.^2;
+            F_current = k .* current.^2;
+            tau       = 0.05 / 2.5;
+
+            % ── Actuator Plot ────────────────────────────────
+            cla(app.UIAxes2);
+            plot(app.UIAxes2, currentRange, F_range, 'm-', 'LineWidth', 2.5);
+            hold(app.UIAxes2, 'on');
+            plot(app.UIAxes2, current, F_current, 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
+            plot(app.UIAxes2, [current current], [0 F_current], 'r--', 'LineWidth', 1);
+            plot(app.UIAxes2, [0 current], [F_current F_current], 'r--', 'LineWidth', 1);
+            hold(app.UIAxes2, 'off');
+            xlabel(app.UIAxes2, 'Current I (A)', 'FontWeight', 'bold');
+            ylabel(app.UIAxes2, 'Actuator Force F (N)', 'FontWeight', 'bold');
+            title(app.UIAxes2, sprintf('Linear Solenoid:  F = k.I^2  (k = %d N/A^2)', k), 'FontSize', 10);
+            grid(app.UIAxes2, 'on');
+            legend(app.UIAxes2, 'F = 20.I^2', 'Operating Point', 'Location', 'northwest');
+
+            % ══════════════════════════════════════════════════
+            %  PERFORMANCE METRICS
+            % ══════════════════════════════════════════════════
+            power        = voltage * current;
+            fullScaleOut = sensitivity * 45 + V_offset;
+            linErrVolts  = linearityErr / 100 * fullScaleOut;
+
+            app.SensitivityEditField.Value     = sprintf('%.4f V/deg', sensitivity);
+            app.ResolutionEditField.Value      = sprintf('%.5f V', resolution);
+            app.RangeEditField.Value           = sprintf('0-45 deg  |  %.1f-%.1f V', V_offset, fullScaleOut);
+            app.PowerConsumptionEditField.Value = sprintf('%.2f W   (P = V x I)', power);
+            app.LinearityErrorEditField.Value  = sprintf('%.1f%%   (+-%.4f V)', linearityErr, linErrVolts);
+            app.ResponseTimeEditField.Value    = sprintf('tau = %.3f s   (L/R model)', tau);
+
+            % ══════════════════════════════════════════════════
+            %  3D VISUALISATION
+            % ══════════════════════════════════════════════════
+            update3D(app, angle, F_current);
+        end
+
+        function update3D(app, angle, force)
+            cla(app.UIAxes3);
+            drawnow limitrate;
+            ax = app.UIAxes3;
+            hold(ax, 'on');
+            view(ax, 25, 20);
+            grid(ax, 'on');
+            ax.Color     = [0.04 0.04 0.08];
+            ax.GridColor = [0.15 0.25 0.45];
+            ax.GridAlpha = 0.6;
+            ax.Box       = 'on';
+
+            maxForce     = 20 * 5^2;
+            brakePercent = (force / maxForce) * 100;
+
+            % ── BRAKE ROTOR ──────────────────────────────────
+            theta     = linspace(0, 2*pi, 120);
+            R_outer   = 1.00;
+            R_inner   = 0.28;
+            discThick = 0.20;
+            rotAngle  = deg2rad(angle * 5);
+
+            fill3(ax, R_outer.*cos(theta), R_outer.*sin(theta),  ones(size(theta))*discThick/2,  [0.42 0.42 0.44], 'EdgeColor','none');
+            fill3(ax, R_outer.*cos(theta), R_outer.*sin(theta), -ones(size(theta))*discThick/2,  [0.32 0.32 0.34], 'EdgeColor','none');
+
+            for t = 1:length(theta)-1
+                xx = [R_outer*cos(theta(t)),   R_outer*cos(theta(t+1)),   R_outer*cos(theta(t+1)), R_outer*cos(theta(t))];
+                yy = [R_outer*sin(theta(t)),   R_outer*sin(theta(t+1)),   R_outer*sin(theta(t+1)), R_outer*sin(theta(t))];
+                fill3(ax, xx, yy, [discThick/2, discThick/2, -discThick/2, -discThick/2], [0.48 0.48 0.50], 'EdgeColor','none');
+            end
+
+            for i = 1:8
+                a = rotAngle + i*pi/4;
+                plot3(ax, [0.38*cos(a), 0.88*cos(a)], [0.38*sin(a), 0.88*sin(a)], [discThick/2+0.01, discThick/2+0.01], 'Color',[0.10 0.10 0.12], 'LineWidth', 2.5);
+            end
+
+            heatR = 0.35 + 0.65*(brakePercent/100);
+            heatG = max(0, 0.20 - 0.18*(brakePercent/100));
+            fill3(ax, 0.65*cos(theta), 0.65*sin(theta), ones(size(theta))*(discThick/2+0.005), [heatR heatG 0.0], 'EdgeColor','none', 'FaceAlpha', 0.15+0.45*(brakePercent/100));
+
+            % ── WHEEL HUB ────────────────────────────────────
+            th = linspace(0,2*pi,40);
+            for t = 1:length(th)-1
+                xx = [R_inner*cos(th(t)), R_inner*cos(th(t+1)), R_inner*cos(th(t+1)), R_inner*cos(th(t))];
+                yy = [R_inner*sin(th(t)), R_inner*sin(th(t+1)), R_inner*sin(th(t+1)), R_inner*sin(th(t))];
+                fill3(ax, xx, yy, [0.40, 0.40, -0.40, -0.40], [0.72 0.72 0.76], 'EdgeColor','none');
+            end
+
+            for i = 1:5
+                ba = rotAngle + i*2*pi/5;
+                [bx,by,bz] = sphere(8);
+                surf(ax, bx*0.035+0.17*cos(ba), by*0.035+0.17*sin(ba), bz*0.035+discThick/2+0.02, 'FaceColor',[0.65 0.65 0.68],'EdgeColor','none');
+            end
+
+            % ── BRAKE PADS ───────────────────────────────────
+            padZ      = 0.55 - 0.33*(brakePercent/100);
+            padTheta  = linspace(pi/5, 4*pi/5, 50);
+            R_pad_out = 0.88;
+            R_pad_in  = 0.35;
+            pG        = max(0.02, 0.35 - 0.33*(brakePercent/100));
+
+            for side = [-1, 1]
+                zFace = side * padZ;
+                zBack = side * (padZ + 0.08);
+                for t = 1:length(padTheta)-1
+                    xx = [R_pad_in*cos(padTheta(t)),  R_pad_out*cos(padTheta(t)),  R_pad_out*cos(padTheta(t+1)), R_pad_in*cos(padTheta(t+1))];
+                    yy = [R_pad_in*sin(padTheta(t)),  R_pad_out*sin(padTheta(t)),  R_pad_out*sin(padTheta(t+1)), R_pad_in*sin(padTheta(t+1))];
+                    fill3(ax, xx, yy, [zFace zFace zFace zFace], [1.0 pG 0.0], 'EdgeColor','none');
+                    fill3(ax, xx, yy, [zBack zBack zBack zBack], [0.18 0.18 0.22], 'EdgeColor','none');
+                end
+            end
+
+            % ── CALIPER BODY ─────────────────────────────────
+            cc = [0.12 0.22 0.48];
+            ce = [0.25 0.45 0.80];
+            fill3(ax,[-0.40  0.40  0.40 -0.40],[ 0.90  0.90 -0.90 -0.90],[ 0.65  0.65  0.65  0.65],cc,'EdgeColor',ce,'LineWidth',1.2);
+            fill3(ax,[-0.40  0.40  0.40 -0.40],[ 0.90  0.90 -0.90 -0.90],[-0.65 -0.65 -0.65 -0.65],cc,'EdgeColor',ce,'LineWidth',1.2);
+            fill3(ax,[-0.40  0.40  0.40 -0.40],[ 0.90  0.90  0.90  0.90],[ 0.65  0.65 -0.65 -0.65],cc,'EdgeColor',ce,'LineWidth',1.2);
+            fill3(ax,[-0.40  0.40  0.40 -0.40],[-0.90 -0.90 -0.90 -0.90],[ 0.65  0.65 -0.65 -0.65],cc,'EdgeColor',ce,'LineWidth',1.2);
+
+            % ── SPARKS at heavy braking ───────────────────────
+            if brakePercent > 70
+                for s = 1:round(brakePercent/20)
+                    sa = rand*2*pi;
+                    sr = 0.80 + rand*0.15;
+                    scatter3(ax, sr*cos(sa), sr*sin(sa), discThick/2+0.02+rand*0.05, 20, [1 0.8 0.1], 'filled');
+                end
+            end
+
+            % ── SENSOR ───────────────────────────────────────
+            [sx,sy,sz] = sphere(15);
+            surf(ax, sx*0.09-0.30, sy*0.09+0.90, sz*0.09+0.35, 'FaceColor',[1.0 0.90 0.0],'EdgeColor','none');
+            plot3(ax,[-0.30 -0.30],[0.90 1.15],[0.35 0.35],'y-','LineWidth',2);
+            text(ax,-0.30,1.20,0.35,'Hall/Pot Sensor','Color',[1.0 0.9 0.0],'FontSize',9,'FontWeight','bold');
+
+            % ── ARROWS ───────────────────────────────────────
+            plot3(ax,[0 0],[0 0],[ 0.75  padZ+0.10],'Color',[0.4 0.8 1.0],'LineWidth',2);
+            plot3(ax,[0 0],[0 0],[-0.75 -(padZ+0.10)],'Color',[0.4 0.8 1.0],'LineWidth',2);
+
+            % ── LABELS ───────────────────────────────────────
+            text(ax, 0.70,-0.20, 0.22,  'Rotor',     'Color',[0.80 0.80 0.80],'FontSize',9,'FontWeight','bold');
+            text(ax, 0.55, 0.55, padZ+0.10,'Brake Pad','Color',[1.0 0.50 0.20],'FontSize',9,'FontWeight','bold');
+            text(ax,-0.42,-0.85, 0.55,  'Caliper',   'Color',[0.50 0.70 1.00],'FontSize',9,'FontWeight','bold');
+
+            % ── STATUS TITLE ──────────────────────────────────
+            if brakePercent < 10
+                status = 'NO BRAKING';            tCol = [0.60 0.60 0.60];
+            elseif brakePercent < 40
+                status = 'LIGHT BRAKING';         tCol = [1.00 0.85 0.10];
+            elseif brakePercent < 75
+                status = 'MODERATE BRAKING';      tCol = [1.00 0.50 0.10];
+            else
+                status = '*** HEAVY BRAKING ***';  tCol = [1.00 0.15 0.10];
+            end
+
+            title(ax, sprintf('%s\nForce: %.0f N  |  Pad Gap: %.3f m  |  %.0f%%', status, force, padZ*2, brakePercent), ...
+                'Color', tCol, 'FontSize', 14, 'FontWeight', 'bold');
+
+            xlabel(ax,'X',              'Color',[0.40 0.75 1.00],'FontSize',12,'FontWeight','bold');
+            ylabel(ax,'Y',              'Color',[0.40 0.75 1.00],'FontSize',12,'FontWeight','bold');
+            zlabel(ax,'Z  Pad Position','Color',[0.40 0.75 1.00],'FontSize',12,'FontWeight','bold');
+            ax.XColor  = [0.40 0.75 1.00];
+            ax.YColor  = [0.40 0.75 1.00];
+            ax.ZColor  = [0.40 0.75 1.00];
+            ax.FontSize = 11;
+            xlim(ax,[-1.3 1.3]);
+            ylim(ax,[-1.3 1.3]);
+            zlim(ax,[-0.80 0.80]);
+            hold(ax,'off');
+        end
+
+    end
+
+    methods (Access = private)
+
+        function startupFcn(app)
+            app.INPUTCONTROLSPanel.Visible      = 'off';
+            app.RESPONSEGRAPHPanel.Visible      = 'off';
+            app.DVISUALISATIONPanel.Visible     = 'off';
+            app.PERFORMANCEMETRICSPanel.Visible = 'off';
+            app.LoginPanel.Visible              = 'on';
+            app.PasswordEditField.Password      = 'on';
+
+            app.MCE415BrakeByWireSimulationGroup3Label.FontColor  = [0.40 0.75 1.00];
+            app.MCE415BrakeByWireSimulationGroup3Label.FontWeight = 'bold';
+            app.FederalUniversityofTechnologyMinnaLabel.FontColor = [1 1 1];
+            app.FederalUniversityofTechnologyMinnaLabel.FontWeight = 'bold';
+            app.MechatronicsEngineeringLabel.FontColor            = [1 1 1];
+            app.MechatronicsEngineeringLabel.FontWeight           = 'bold';
+            app.LoginPanel.BackgroundColor  = [0.05 0.08 0.15];
+            app.LoginButton.BackgroundColor = [0.40 0.75 1.00];
+            app.LoginButton.FontColor       = [0 0 0];
+            app.LoginButton.FontWeight      = 'bold';
+
+            app.UIFigure.Color                          = [0.08 0.08 0.12];
+            app.INPUTCONTROLSPanel.BackgroundColor      = [0.08 0.12 0.20];
+            app.RESPONSEGRAPHPanel.BackgroundColor      = [0.05 0.08 0.15];
+            app.DVISUALISATIONPanel.BackgroundColor     = [0.05 0.08 0.15];
+            app.PERFORMANCEMETRICSPanel.BackgroundColor = [0.08 0.12 0.20];
+            app.INPUTCONTROLSPanel.ForegroundColor      = [0.40 0.75 1.00];
+            app.RESPONSEGRAPHPanel.ForegroundColor      = [0.40 0.75 1.00];
+            app.DVISUALISATIONPanel.ForegroundColor     = [0.40 0.75 1.00];
+            app.PERFORMANCEMETRICSPanel.ForegroundColor = [0.40 0.75 1.00];
+            app.UIAxes.Color   = [0.05 0.08 0.15];
+            app.UIAxes2.Color  = [0.05 0.08 0.15];
+            app.UIAxes3.Color  = [0.04 0.04 0.08];
+            app.UIAxes.XColor  = [0.40 0.75 1.00];
+            app.UIAxes.YColor  = [0.40 0.75 1.00];
+            app.UIAxes2.XColor = [0.40 0.75 1.00];
+            app.UIAxes2.YColor = [0.40 0.75 1.00];
+            app.UIAxes3.XColor = [0.40 0.75 1.00];
+            app.UIAxes3.YColor = [0.40 0.75 1.00];
+            app.UIAxes3.ZColor = [0.40 0.75 1.00];
+
+            disableDefaultInteractivity(app.UIAxes);
+            disableDefaultInteractivity(app.UIAxes2);
+            disableDefaultInteractivity(app.UIAxes3);
+        end
+
+        function SensorTypeDropDownValueChanged(app, event)
+            updateAll(app);
+        end
+
+        function SensorTypeDropDownValueChanged3(app, event)
+            updateAll(app);
+        end
+
+        function PedalAngleSliderValueChanged(app, event)
+            updateAll(app);
+        end
+
+        function SupplyVoltageVEditFieldValueChanged(app, event)
+            updateAll(app);
+        end
+
+        function CurrentASliderValueChanged(app, event)
+            updateAll(app);
+        end
+
+        function LoginButtonPushed(app, event)
+            username = app.UsernameEditField.Value;
+            password = app.PasswordEditField.Value;
+
+            if strcmp(username, 'mechatronics_415') && strcmp(password, 'group3')
+                startPos = app.LoginPanel.Position;
+                appWidth = app.UIFigure.Position(3);
+                for i = 1:20
+                    app.LoginPanel.Position(1) = startPos(1) - (appWidth/20)*i;
+                    pause(0.02);
+                end
+                app.LoginPanel.Visible = 'off';
+                app.LoginPanel.Position(1) = startPos(1);
+                app.INPUTCONTROLSPanel.Visible      = 'on';
+                app.RESPONSEGRAPHPanel.Visible      = 'on';
+                app.DVISUALISATIONPanel.Visible     = 'on';
+                app.PERFORMANCEMETRICSPanel.Visible = 'on';
+                updateAll(app);
+            else
+                app.UsernameEditField.Value = '';
+                app.PasswordEditField.Value = '';
+                uialert(app.UIFigure, ...
+                    'Incorrect username or password. Please try again.', ...
+                    'Login Failed', 'Icon', 'error');
+                focus(app.UsernameEditField);
+            end
+        end
+
+    end
+
+    methods (Access = private)
+
+        function createComponents(app)
+
+            pathToMLAPP = fileparts(mfilename('fullpath'));
+
+            app.UIFigure = uifigure('Visible', 'off');
+            app.UIFigure.Position = [100 100 2666 1302];
+            app.UIFigure.Name = 'MATLAB App';
+
+            % INPUT CONTROLS
+            app.INPUTCONTROLSPanel = uipanel(app.UIFigure);
+            app.INPUTCONTROLSPanel.TitlePosition = 'centertop';
+            app.INPUTCONTROLSPanel.Title    = 'INPUT CONTROLS';
+            app.INPUTCONTROLSPanel.FontName = 'Times New Roman';
+            app.INPUTCONTROLSPanel.FontSize = 36;
+            app.INPUTCONTROLSPanel.Position = [22 794 1074 478];
+
+            app.SensorTypeDropDownLabel = uilabel(app.INPUTCONTROLSPanel);
+            app.SensorTypeDropDownLabel.HorizontalAlignment = 'right';
+            app.SensorTypeDropDownLabel.FontName = 'Times New Roman';
+            app.SensorTypeDropDownLabel.FontSize = 36;
+            app.SensorTypeDropDownLabel.Position = [259 340 183 48];
+            app.SensorTypeDropDownLabel.Text = 'Sensor Type';
+
+            app.SensorTypeDropDown = uidropdown(app.INPUTCONTROLSPanel);
+            app.SensorTypeDropDown.Items = {'Hall Effect', 'Potentiometer'};
+            app.SensorTypeDropDown.ValueChangedFcn = createCallbackFcn(app, @SensorTypeDropDownValueChanged3, true);
+            app.SensorTypeDropDown.FontName = 'Times New Roman';
+            app.SensorTypeDropDown.FontSize = 36;
+            app.SensorTypeDropDown.Position = [595 339 344 46];
+            app.SensorTypeDropDown.Value = 'Hall Effect';
+
+            app.PedalAngleSliderLabel = uilabel(app.INPUTCONTROLSPanel);
+            app.PedalAngleSliderLabel.HorizontalAlignment = 'right';
+            app.PedalAngleSliderLabel.FontName = 'Times New Roman';
+            app.PedalAngleSliderLabel.FontSize = 36;
+            app.PedalAngleSliderLabel.Position = [259 241 229 48];
+            app.PedalAngleSliderLabel.Text = 'Pedal Angle (deg)';
+
+            app.PedalAngleSlider = uislider(app.INPUTCONTROLSPanel);
+            app.PedalAngleSlider.Limits = [0 45];
+            app.PedalAngleSlider.ValueChangedFcn  = createCallbackFcn(app, @PedalAngleSliderValueChanged, true);
+            app.PedalAngleSlider.ValueChangingFcn = createCallbackFcn(app, @PedalAngleSliderValueChanged, true);
+            app.PedalAngleSlider.FontName = 'Times New Roman';
+            app.PedalAngleSlider.FontSize = 36;
+            app.PedalAngleSlider.Position = [626 288 312 3];
+
+            app.CurrentASliderLabel = uilabel(app.INPUTCONTROLSPanel);
+            app.CurrentASliderLabel.HorizontalAlignment = 'right';
+            app.CurrentASliderLabel.FontName = 'Times New Roman';
+            app.CurrentASliderLabel.FontSize = 36;
+            app.CurrentASliderLabel.Position = [259 153 174 48];
+            app.CurrentASliderLabel.Text = 'Current (A)';
+
+            app.CurrentASlider = uislider(app.INPUTCONTROLSPanel);
+            app.CurrentASlider.Limits = [0 5];
+            app.CurrentASlider.ValueChangedFcn  = createCallbackFcn(app, @CurrentASliderValueChanged, true);
+            app.CurrentASlider.ValueChangingFcn = createCallbackFcn(app, @CurrentASliderValueChanged, true);
+            app.CurrentASlider.FontName = 'Times New Roman';
+            app.CurrentASlider.FontSize = 36;
+            app.CurrentASlider.Position = [628 196 332 3];
+
+            app.SupplyVoltageVEditFieldLabel = uilabel(app.INPUTCONTROLSPanel);
+            app.SupplyVoltageVEditFieldLabel.HorizontalAlignment = 'right';
+            app.SupplyVoltageVEditFieldLabel.FontName = 'Times New Roman';
+            app.SupplyVoltageVEditFieldLabel.FontSize = 36;
+            app.SupplyVoltageVEditFieldLabel.Position = [259 48 287 48];
+            app.SupplyVoltageVEditFieldLabel.Text = 'Supply Voltage (V)';
+
+            app.SupplyVoltageVEditField = uieditfield(app.INPUTCONTROLSPanel, 'numeric');
+            app.SupplyVoltageVEditField.Limits = [0 12];
+            app.SupplyVoltageVEditField.ValueChangedFcn = createCallbackFcn(app, @SupplyVoltageVEditFieldValueChanged, true);
+            app.SupplyVoltageVEditField.HorizontalAlignment = 'center';
+            app.SupplyVoltageVEditField.FontName = 'Times New Roman';
+            app.SupplyVoltageVEditField.FontSize = 36;
+            app.SupplyVoltageVEditField.Position = [634 50 334 46];
+            app.SupplyVoltageVEditField.Value = 5;
+
+            % RESPONSE GRAPH
+            app.RESPONSEGRAPHPanel = uipanel(app.UIFigure);
+            app.RESPONSEGRAPHPanel.TitlePosition = 'centertop';
+            app.RESPONSEGRAPHPanel.Title    = 'RESPONSE GRAPH';
+            app.RESPONSEGRAPHPanel.FontName = 'Times New Roman';
+            app.RESPONSEGRAPHPanel.FontSize = 36;
+            app.RESPONSEGRAPHPanel.Position = [1133 526 1318 729];
+
+            app.UIAxes = uiaxes(app.RESPONSEGRAPHPanel);
+            app.UIAxes.FontName = 'Times New Roman';
+            app.UIAxes.FontSize = 24;
+            app.UIAxes.Position = [21 15 617 651];
+
+            app.UIAxes2 = uiaxes(app.RESPONSEGRAPHPanel);
+            app.UIAxes2.FontName = 'Times New Roman';
+            app.UIAxes2.FontSize = 24;
+            app.UIAxes2.Position = [714 21 564 633];
+
+            % 3D VISUALISATION
+            app.DVISUALISATIONPanel = uipanel(app.UIFigure);
+            app.DVISUALISATIONPanel.TitlePosition = 'centertop';
+            app.DVISUALISATIONPanel.Title    = '3D VISUALISATION';
+            app.DVISUALISATIONPanel.FontName = 'Times New Roman';
+            app.DVISUALISATIONPanel.FontSize = 36;
+            app.DVISUALISATIONPanel.Position = [21 77 1099 694];
+
+            app.UIAxes3 = uiaxes(app.DVISUALISATIONPanel);
+            app.UIAxes3.FontName = 'Times New Roman';
+            app.UIAxes3.FontSize = 24;
+            app.UIAxes3.Position = [29 1 1046 633];
+
+            % PERFORMANCE METRICS
+            app.PERFORMANCEMETRICSPanel = uipanel(app.UIFigure);
+            app.PERFORMANCEMETRICSPanel.TitlePosition = 'centertop';
+            app.PERFORMANCEMETRICSPanel.Title    = 'PERFORMANCE METRICS';
+            app.PERFORMANCEMETRICSPanel.FontName = 'Times New Roman';
+            app.PERFORMANCEMETRICSPanel.FontSize = 36;
+            app.PERFORMANCEMETRICSPanel.Position = [1153 77 1297 430];
+
+            % Row 1 Sensitivity
+            app.SensitivityEditFieldLabel = uilabel(app.PERFORMANCEMETRICSPanel);
+            app.SensitivityEditFieldLabel.HorizontalAlignment = 'right';
+            app.SensitivityEditFieldLabel.FontName = 'Times New Roman';
+            app.SensitivityEditFieldLabel.FontSize = 28;
+            app.SensitivityEditFieldLabel.Position = [20 355 220 38];
+            app.SensitivityEditFieldLabel.Text = 'Sensitivity';
+            app.SensitivityEditField = uieditfield(app.PERFORMANCEMETRICSPanel, 'text');
+            app.SensitivityEditField.FontName = 'Times New Roman';
+            app.SensitivityEditField.FontSize = 28;
+            app.SensitivityEditField.Position = [255 355 600 38];
+
+            % Row 2 Resolution
+            app.ResolutionEditFieldLabel = uilabel(app.PERFORMANCEMETRICSPanel);
+            app.ResolutionEditFieldLabel.HorizontalAlignment = 'right';
+            app.ResolutionEditFieldLabel.FontName = 'Times New Roman';
+            app.ResolutionEditFieldLabel.FontSize = 28;
+            app.ResolutionEditFieldLabel.Position = [20 303 220 38];
+            app.ResolutionEditFieldLabel.Text = 'Resolution';
+            app.ResolutionEditField = uieditfield(app.PERFORMANCEMETRICSPanel, 'text');
+            app.ResolutionEditField.FontName = 'Times New Roman';
+            app.ResolutionEditField.FontSize = 28;
+            app.ResolutionEditField.Position = [255 303 600 38];
+
+            % Row 3 Range
+            app.RangeEditFieldLabel = uilabel(app.PERFORMANCEMETRICSPanel);
+            app.RangeEditFieldLabel.HorizontalAlignment = 'right';
+            app.RangeEditFieldLabel.FontName = 'Times New Roman';
+            app.RangeEditFieldLabel.FontSize = 28;
+            app.RangeEditFieldLabel.Position = [20 251 220 38];
+            app.RangeEditFieldLabel.Text = 'Range';
+            app.RangeEditField = uieditfield(app.PERFORMANCEMETRICSPanel, 'text');
+            app.RangeEditField.FontName = 'Times New Roman';
+            app.RangeEditField.FontSize = 28;
+            app.RangeEditField.Position = [255 251 600 38];
+
+            % Row 4 Power
+            app.PowerConsumptionEditFieldLabel = uilabel(app.PERFORMANCEMETRICSPanel);
+            app.PowerConsumptionEditFieldLabel.HorizontalAlignment = 'right';
+            app.PowerConsumptionEditFieldLabel.FontName = 'Times New Roman';
+            app.PowerConsumptionEditFieldLabel.FontSize = 28;
+            app.PowerConsumptionEditFieldLabel.Position = [20 199 220 38];
+            app.PowerConsumptionEditFieldLabel.Text = 'Power (W)';
+            app.PowerConsumptionEditField = uieditfield(app.PERFORMANCEMETRICSPanel, 'text');
+            app.PowerConsumptionEditField.FontName = 'Times New Roman';
+            app.PowerConsumptionEditField.FontSize = 28;
+            app.PowerConsumptionEditField.Position = [255 199 600 38];
+
+            % Row 5 Linearity Error
+            app.LinearityErrorEditFieldLabel = uilabel(app.PERFORMANCEMETRICSPanel);
+            app.LinearityErrorEditFieldLabel.HorizontalAlignment = 'right';
+            app.LinearityErrorEditFieldLabel.FontName = 'Times New Roman';
+            app.LinearityErrorEditFieldLabel.FontSize = 28;
+            app.LinearityErrorEditFieldLabel.Position = [20 147 220 38];
+            app.LinearityErrorEditFieldLabel.Text = 'Linearity Err';
+            app.LinearityErrorEditField = uieditfield(app.PERFORMANCEMETRICSPanel, 'text');
+            app.LinearityErrorEditField.FontName = 'Times New Roman';
+            app.LinearityErrorEditField.FontSize = 28;
+            app.LinearityErrorEditField.Position = [255 147 600 38];
+
+            % Row 6 Response Time
+            app.ResponseTimeEditFieldLabel = uilabel(app.PERFORMANCEMETRICSPanel);
+            app.ResponseTimeEditFieldLabel.HorizontalAlignment = 'right';
+            app.ResponseTimeEditFieldLabel.FontName = 'Times New Roman';
+            app.ResponseTimeEditFieldLabel.FontSize = 28;
+            app.ResponseTimeEditFieldLabel.Position = [20 95 220 38];
+            app.ResponseTimeEditFieldLabel.Text = 'Response Time';
+            app.ResponseTimeEditField = uieditfield(app.PERFORMANCEMETRICSPanel, 'text');
+            app.ResponseTimeEditField.FontName = 'Times New Roman';
+            app.ResponseTimeEditField.FontSize = 28;
+            app.ResponseTimeEditField.Position = [255 95 600 38];
+
+            % LOGIN Panel
+            app.LoginPanel = uipanel(app.UIFigure);
+            app.LoginPanel.TitlePosition = 'centertop';
+            app.LoginPanel.Title    = 'MCE 415  Brake-By-Wire Simulation  |  Group 3  |  FUTMinna';
+            app.LoginPanel.FontName = 'Times New Roman';
+            app.LoginPanel.FontSize = 32;
+            app.LoginPanel.Position = [50 2 2665 1301];
+
+            app.Image = uiimage(app.LoginPanel);
+            app.Image.Position = [250 1049 100 100];
+            app.Image.ImageSource = fullfile(pathToMLAPP, 'mechatronics_logo.jpg');
+
+            app.Image2 = uiimage(app.LoginPanel);
+            app.Image2.Position = [2213 1031 100 100];
+            app.Image2.ImageSource = fullfile(pathToMLAPP, 'futminna_logo.jpg');
+
+            app.MechatronicsEngineeringLabel = uilabel(app.LoginPanel);
+            app.MechatronicsEngineeringLabel.FontName = 'Times New Roman';
+            app.MechatronicsEngineeringLabel.FontSize = 36;
+            app.MechatronicsEngineeringLabel.Position = [162 961 700 48];
+            app.MechatronicsEngineeringLabel.Text = 'Mechatronics Engineering';
+
+            app.FederalUniversityofTechnologyMinnaLabel = uilabel(app.LoginPanel);
+            app.FederalUniversityofTechnologyMinnaLabel.FontName = 'Times New Roman';
+            app.FederalUniversityofTechnologyMinnaLabel.FontSize = 36;
+            app.FederalUniversityofTechnologyMinnaLabel.Position = [1500 929 1000 48];
+            app.FederalUniversityofTechnologyMinnaLabel.Text = 'Federal University of Technology Minna';
+
+            app.MCE415BrakeByWireSimulationGroup3Label = uilabel(app.LoginPanel);
+            app.MCE415BrakeByWireSimulationGroup3Label.FontName = 'Times New Roman';
+            app.MCE415BrakeByWireSimulationGroup3Label.FontSize = 44;
+            app.MCE415BrakeByWireSimulationGroup3Label.Position = [600 820 1500 65];
+            app.MCE415BrakeByWireSimulationGroup3Label.Text = 'MCE 415  —  Brake-By-Wire Simulation  |  Group 3';
+
+            app.UsernameEditFieldLabel = uilabel(app.LoginPanel);
+            app.UsernameEditFieldLabel.HorizontalAlignment = 'right';
+            app.UsernameEditFieldLabel.FontName = 'Times New Roman';
+            app.UsernameEditFieldLabel.FontSize = 36;
+            app.UsernameEditFieldLabel.Position = [750 640 220 48];
+            app.UsernameEditFieldLabel.Text = 'Username';
+
+            app.UsernameEditField = uieditfield(app.LoginPanel, 'text');
+            app.UsernameEditField.HorizontalAlignment = 'center';
+            app.UsernameEditField.FontName = 'Times New Roman';
+            app.UsernameEditField.FontSize = 36;
+            app.UsernameEditField.Position = [1000 640 700 52];
+
+            app.PasswordEditFieldLabel = uilabel(app.LoginPanel);
+            app.PasswordEditFieldLabel.HorizontalAlignment = 'right';
+            app.PasswordEditFieldLabel.FontName = 'Times New Roman';
+            app.PasswordEditFieldLabel.FontSize = 36;
+            app.PasswordEditFieldLabel.Position = [750 550 220 48];
+            app.PasswordEditFieldLabel.Text = 'Password';
+
+            app.PasswordEditField = uieditfield(app.LoginPanel, 'text');
+            app.PasswordEditField.HorizontalAlignment = 'center';
+            app.PasswordEditField.FontName = 'Times New Roman';
+            app.PasswordEditField.FontSize = 36;
+            app.PasswordEditField.Password = 'on';
+            app.PasswordEditField.Position = [1000 550 700 52];
+
+            app.LoginButton = uibutton(app.LoginPanel, 'push');
+            app.LoginButton.ButtonPushedFcn = createCallbackFcn(app, @LoginButtonPushed, true);
+            app.LoginButton.FontName = 'Times New Roman';
+            app.LoginButton.FontSize = 42;
+            app.LoginButton.Position = [1050 410 350 75];
+            app.LoginButton.Text = 'LOGIN';
+
+            app.Label = uilabel(app.LoginPanel);
+            app.Label.FontName = 'Times New Roman';
+            app.Label.FontSize = 32;
+            app.Label.Position = [700 340 1000 48];
+            app.Label.Text = '';
+
+            app.UIFigure.Visible = 'on';
+        end
+    end
+
+    methods (Access = public)
+
+        function app = MCE413
+            createComponents(app)
+            registerApp(app, app.UIFigure)
+            runStartupFcn(app, @startupFcn)
+            if nargout == 0
+                clear app
+            end
+        end
+
+        function delete(app)
+            delete(app.UIFigure)
+        end
+    end
+end
